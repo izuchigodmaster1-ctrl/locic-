@@ -24,6 +24,24 @@ class WorkflowOrchestrator:
             logger.error(f"Command failed: {' '.join(command)}. Error: {e.stderr}")
             raise
 
+    def _has_staged_changes(self) -> bool:
+        result = subprocess.run(
+            ["git", "diff", "--cached", "--quiet"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        return result.returncode != 0
+
+    def _branch_exists(self, branch_name: str) -> bool:
+        result = subprocess.run(
+            ["git", "rev-parse", "--verify", "--quiet", branch_name],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        return result.returncode == 0
+
     def run_workflow(self, task_description: str):
         logger.info(f"Starting workflow: {task_description}")
         
@@ -32,7 +50,11 @@ class WorkflowOrchestrator:
         
         try:
             # Git operations with error handling
-            self._execute(["git", "checkout", "-b", branch_name])
+            if self._branch_exists(branch_name):
+                logger.info(f"Branch already exists. Checking out {branch_name}.")
+                self._execute(["git", "checkout", branch_name])
+            else:
+                self._execute(["git", "checkout", "-b", branch_name])
             
             # Integrated Pipeline: Generate -> Refine -> Commit
             code = self.generator.generate(task_description)
@@ -42,9 +64,14 @@ class WorkflowOrchestrator:
             write_code(f"{self.workspace}/main.py", refined_code)
             
             self._execute(["git", "add", "."])
-            self._execute(["git", "commit", "-m", f"Implemented {task_description}"])
-            self._execute(["git", "checkout", "main"])
-            self._execute(["git", "merge", branch_name])
+            if self._has_staged_changes():
+                self._execute(["git", "commit", "-m", f"Implemented {task_description}"])
+                self._execute(["git", "checkout", "main"])
+                self._execute(["git", "merge", branch_name])
+            else:
+                logger.info("No staged changes to commit. Skipping commit and merge.")
+                self._execute(["git", "checkout", "main"])
+                self._execute(["git", "branch", "-D", branch_name])
             
             logger.info("Workflow success.")
             
