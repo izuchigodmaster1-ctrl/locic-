@@ -46,6 +46,7 @@ class WorkflowOrchestrator:
         logger.info(f"Starting workflow: {task_description}")
         
         ensure_workspace(self.workspace)
+        logger.info(f"Using workspace: {self.workspace}")
         branch_name = sanitize_branch_name(task_description)
         
         try:
@@ -53,15 +54,20 @@ class WorkflowOrchestrator:
             if self._branch_exists(branch_name):
                 logger.info(f"Branch already exists. Checking out {branch_name}.")
                 self._execute(["git", "checkout", branch_name])
+                branch_created = False
             else:
                 self._execute(["git", "checkout", "-b", branch_name])
+                branch_created = True
             
             # Integrated Pipeline: Generate -> Refine -> Commit
             code = self.generator.generate(task_description)
             refined_code = self.refiner.run_refinement_loop(code)
             
             # Save and Merge
-            write_code(f"{self.workspace}/main.py", refined_code)
+            output_path = f"{self.workspace}/main.py"
+            logger.info(f"Writing generated output to: {output_path}")
+            write_code(output_path, refined_code)
+            logger.info("Generated code saved.")
             
             self._execute(["git", "add", "."])
             if self._has_staged_changes():
@@ -69,9 +75,15 @@ class WorkflowOrchestrator:
                 self._execute(["git", "checkout", "main"])
                 self._execute(["git", "merge", branch_name])
             else:
-                logger.info("No staged changes to commit. Skipping commit and merge.")
+                logger.info(
+                    "No staged changes to commit. Generated output may be ignored by git. "
+                    "Skipping commit and merge."
+                )
                 self._execute(["git", "checkout", "main"])
-                self._execute(["git", "branch", "-D", branch_name])
+                if branch_created:
+                    self._execute(["git", "branch", "-D", branch_name])
+                else:
+                    logger.info("Keeping existing branch for future reuse.")
             
             logger.info("Workflow success.")
             

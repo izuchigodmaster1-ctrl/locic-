@@ -34,6 +34,7 @@ Run the repository launcher:
 ```bash
 python3 run.py workflow "Generate a Python utility that prints system info"
 python3 run.py chatbot
+python3 run.py test
 ```
 
 Run the chatbot:

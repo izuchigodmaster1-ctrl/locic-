@@ -16,6 +16,7 @@ SCRIPT_MAP = {
     "orchestrator": ROOT / "The Orchestrator.py",
     "guardrails": ROOT / "Implement guardrails.py",
     "chatbot": ROOT / "chatbot.py",
+    "test": ROOT / "Automated Testing.py",
 }
 
 
@@ -50,6 +51,11 @@ def main() -> None:
 
     chatbot = subparsers.add_parser("chatbot", help="Run the local chatbot.")
 
+    test = subparsers.add_parser("test", help="Run the automated test harness.")
+    test.add_argument("--task", help="Optional task description for the test runner.")
+    test.add_argument("--output", help="Optional output filename inside the workspace.")
+    test.add_argument("--tests", help="Optional pytest test file path.")
+
     args = parser.parse_args()
 
     if args.command == "workflow":
@@ -78,6 +84,15 @@ def main() -> None:
         return_code = run_script(SCRIPT_MAP["orchestrator"], extra)
     elif args.command == "chatbot":
         return_code = run_script(SCRIPT_MAP["chatbot"], [])
+    elif args.command == "test":
+        extra: list[str] = []
+        if args.task:
+            extra.extend(["--task", args.task])
+        if args.output:
+            extra.extend(["--output", args.output])
+        if args.tests:
+            extra.extend(["--tests", args.tests])
+        return_code = run_script(SCRIPT_MAP["test"], extra)
     else:
         parser.print_help()
         return_code = 1
